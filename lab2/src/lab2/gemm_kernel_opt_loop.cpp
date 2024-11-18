@@ -40,7 +40,7 @@ void random_matrix( int m, int n, float *a)
             a[i*n+j]= 2.0 * (float)drand48( ) - 1.0 ;
 }
 
-double perform_gemm_baseline(unsigned iteration_times, int m, int n, int k) {
+double perform_gemm_opt_prefetch(unsigned iteration_times, int m, int n, int k) {
     float *matrix_a = nullptr, *matrix_b = nullptr, *matrix_c = nullptr;
     int i = 0;
     double start=0, end=0;
@@ -54,12 +54,12 @@ double perform_gemm_baseline(unsigned iteration_times, int m, int n, int k) {
     memset((void *)matrix_c, 0, m * n * sizeof(float));
 
     for (i = 0; i < 10; i++) {  // 使缓存热起来
-        gemm_kernel_baseline(matrix_c, matrix_a, matrix_b, m, n, k);
+        gemm_kernel_opt_prefetch(matrix_c, matrix_a, matrix_b, m, n, k);
     }
 
     start = dclock();
     for (i = 0; i < iteration_times; i ++) {  // 真实跑性能
-        gemm_kernel_baseline(matrix_c, matrix_a, matrix_b, m, n, k);
+        gemm_kernel_opt_prefetch(matrix_c, matrix_a, matrix_b, m, n, k);
     }
     end = dclock();
     delete [] matrix_a;
@@ -145,7 +145,7 @@ int main(int argc, char *argv[]) {
     assert(ss >> N);
     /**结束读取命令行参数**/
     cout << "--- Performance before loop optimization ---"<<endl;
-    baseline_benchmark = do_gemm(M, K, N, perform_gemm_baseline);
+    baseline_benchmark = do_gemm(M, K, N, perform_gemm_opt_prefetch);
     cout << "--- Performance for after loop optimization ---"<<endl;
     opt_loop_benchmark = do_gemm(M, K, N, perform_gemm_opt_loop);
     cout <<"----------------------------"<<endl;

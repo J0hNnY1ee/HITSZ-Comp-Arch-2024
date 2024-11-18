@@ -25,6 +25,5 @@ ELSE ()
     add_compile_options(-fPIC -g)
 ENDIF ()
 
-add_subdirectory(src/lab1)
 add_subdirectory(src/lab2)
-#add_subdirectory(src/lab3)
+

@@ -52,54 +52,21 @@
     pop %rax
 .endm
 
+.macro GEMM_INIT
+    mov %rdx, MAT_B
+
+    xor loop_m, loop_m
+    xor loop_k, loop_k
+    xor loop_n, loop_n
+.endm
 
 .macro DO_GEMM
-DO_LOOP_K:
-    xor loop_m, loop_m
-
-DO_LOOP_M:
-    xor loop_n, loop_n
-
-    mov loop_m, %rax
-    mul DIM_K
-    mov %rax, mat_elem_idx
-    add loop_k, mat_elem_idx                    // 计算 m*K+k
-    flds (MAT_A, mat_elem_idx, 4)     // 加载 A[m][k]
-
-DO_LOOP_N:
-    mov DIM_N, %rax
-    mul loop_k
-    mov %rax, mat_elem_idx
-    add loop_n, mat_elem_idx                    // 计算 k*N+n
-    flds (MAT_B, mat_elem_idx, 4)     // 加载 B[k][n]
-
-    fmul %st(1), %st(0)                 // 计算A[m][k] * B[k][n]
-
-    mov DIM_N, %rax
-    mul loop_m
-    mov %rax, mat_elem_idx
-    add loop_n, mat_elem_idx                    // 计算 m*N+n
-    flds (MAT_C, mat_elem_idx, 4)     // 加载 C[m][n]
-
-    faddp %st(1), %st(0)                 // 计算 C[m][n] + A[m][k] * B[k][n]
-    fstps (MAT_C, mat_elem_idx, 4)
-
-    add $1, loop_n
-    cmp DIM_N, loop_n
-    jl DO_LOOP_N
-
-    fstp %st(0)                   // 仅弹出元素
-    add $1, loop_m
-    cmp DIM_M, loop_m
-    jl DO_LOOP_M
-
-    add $1, loop_k
-    cmp DIM_K, loop_k
-    jl DO_LOOP_K
+    // TODO: 练习2的性能优化任务
 .endm
 
 gemm_kernel_opt_prefetch:
     PUSHD
+    GEMM_INIT
     DO_GEMM
     POPD
     ret
