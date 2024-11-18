@@ -1,0 +1,24 @@
+version: "3.4"
+services:
+  cpu_parallel_env:
+    restart: "no"
+    build:
+      context: .
+      dockerfile: ./cpu_parallel_env.dockerfile
+    image: parallel_env:cpu
+    security_opt:
+      - seccomp:unconfined
+    cap_add:
+      - ALL
+    volumes:
+      - ../:/data/computer_architecture_labs/
+    environment:
+      - WORK_DIR=debug
+    ports:
+      - "46000:22"
+    command:
+      - /bin/sh
+      - -c
+      - |
+        echo "starting ssh server...." && \
+        /sbin/sshd -D

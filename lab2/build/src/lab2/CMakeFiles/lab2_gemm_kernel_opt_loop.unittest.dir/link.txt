@@ -1,0 +1,1 @@
+/usr/bin/g++ CMakeFiles/lab2_gemm_kernel_opt_loop.unittest.dir/test_gemm_kernel_opt_loop.cpp.o CMakeFiles/lab2_gemm_kernel_opt_loop.unittest.dir/gemm_kernel_opt_loop.S.o -o ../../dist/bins/lab2_gemm_kernel_opt_loop.unittest  ../../lib/libgtest.a ../../lib/libgtest_main.a ../../lib/libgtest.a 

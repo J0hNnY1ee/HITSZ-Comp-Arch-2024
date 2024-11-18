@@ -1,0 +1,1 @@
+/usr/bin/gcc  -masm=att -nostdlib CMakeFiles/lab1_print_integer.dir/print_integer.S.o -o ../../dist/bins/lab1_print_integer 

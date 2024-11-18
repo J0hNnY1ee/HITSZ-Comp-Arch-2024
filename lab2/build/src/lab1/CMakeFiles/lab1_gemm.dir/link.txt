@@ -1,0 +1,1 @@
+/usr/bin/g++ CMakeFiles/lab1_gemm.dir/gemm.cpp.o CMakeFiles/lab1_gemm.dir/gemm_kernel.S.o -o ../../dist/bins/lab1_gemm 

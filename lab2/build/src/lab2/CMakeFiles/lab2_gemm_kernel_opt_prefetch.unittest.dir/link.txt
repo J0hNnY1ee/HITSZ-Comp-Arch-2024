@@ -1,0 +1,1 @@
+/usr/bin/g++ CMakeFiles/lab2_gemm_kernel_opt_prefetch.unittest.dir/test_gemm_kernel_opt_prefetch.cpp.o CMakeFiles/lab2_gemm_kernel_opt_prefetch.unittest.dir/gemm_kernel_opt_prefetch.S.o -o ../../dist/bins/lab2_gemm_kernel_opt_prefetch.unittest  ../../lib/libgtest.a ../../lib/libgtest_main.a ../../lib/libgtest.a 

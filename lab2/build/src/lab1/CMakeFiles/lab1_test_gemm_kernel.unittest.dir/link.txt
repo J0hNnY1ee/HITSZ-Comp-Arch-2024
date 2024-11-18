@@ -1,0 +1,1 @@
+/usr/bin/g++ CMakeFiles/lab1_test_gemm_kernel.unittest.dir/test_gemm_kernel.cpp.o CMakeFiles/lab1_test_gemm_kernel.unittest.dir/gemm_kernel.S.o -o ../../dist/bins/lab1_test_gemm_kernel.unittest  ../../lib/libgtest.a ../../lib/libgtest_main.a ../../lib/libgtest.a 
