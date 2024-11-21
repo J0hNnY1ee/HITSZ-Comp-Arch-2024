@@ -87,13 +87,40 @@
 
     vbroadcastss (MAT_A, mat_elem_idx), mat_a0_0_8    // 将A[m][k]广播到AVX寄存器的8个单元
 
-    // TODO 练习3: 请添加加载并广播A[m+1][k]-->mat_a1_0_8的逻辑
+    ;// TODO 练习3: 请添加加载并广播A[m+1][k]-->mat_a1_0_8的逻辑
+    mov  temp_reg,mat_elem_idx
+    add DIM_K ,mat_elem_idx
+    shl $2 ,mat_elem_idx
+    vbroadcastss (MAT_A, mat_elem_idx), mat_a1_0_8
 
 .endm
 
 .macro LOAD_MAT_B    // 每次装载矩阵B一行32个元素, 即B[k][n:n+32]
 
-    // TODO 练习3: 请添加加载B[k][n:n+32]-->mat_b0_0_8, mat_b0_8_16, mat_b0_16_24, mat_b0_24_32的逻辑
+    ;// TODO 练习3: 请添加加载B[k][n:n+32]-->mat_b0_0_8, mat_b0_8_16, mat_b0_16_24, mat_b0_24_32的逻辑
+    mov loop_k, %rax
+    mul DIM_N
+    mov %rax, temp_reg
+    add loop_n, temp_reg
+
+    // 计算B[k][n]的字节地址
+    mov temp_reg, mat_elem_idx
+    shl $2, mat_elem_idx        // 左移，相当于乘4
+
+    // 加载B[k][n:n+8]到mat_b0_0_8
+    vmovups (MAT_B, mat_elem_idx), mat_b0_0_8
+
+    // 加载B[k][n+8:n+16]到mat_b0_8_16
+    add $32, mat_elem_idx       // 偏移量为8个float，即32字节
+    vmovups (MAT_B, mat_elem_idx), mat_b0_8_16
+
+    // 加载B[k][n+16:n+24]到mat_b0_16_24
+    add $32, mat_elem_idx       // 再偏移32字节
+    vmovups (MAT_B, mat_elem_idx), mat_b0_16_24
+
+    // 加载B[k][n+24:n+32]到mat_b0_24_32
+    add $32, mat_elem_idx       // 再偏移32字节
+    vmovups (MAT_B, mat_elem_idx), mat_b0_24_32
 
 .endm
 
@@ -107,15 +134,40 @@
     mov temp_reg, mat_elem_idx
     shl $2, mat_elem_idx        // 左移，相当于乘4
 
-    // TODO 练习3: 请添加加载C[m][n:n+32]-->mat_c0_0_8, mat_c0_8_16, mat_c0_16_24, mat_c0_24_32的逻辑
+    // 加载C[m][n:n+8]到mat_c0_0_8
+    vmovups (MAT_C, mat_elem_idx), mat_c0_0_8
+
+    // 加载C[m][n+8:n+16]到mat_c0_8_16
+    add $32, mat_elem_idx       // 偏移量为8个float，即32字节
+    vmovups (MAT_C, mat_elem_idx), mat_c0_8_16
+
+    // 加载C[m][n+16:n+24]到mat_c0_16_24
+    add $32, mat_elem_idx       // 再偏移32字节
+    vmovups (MAT_C, mat_elem_idx), mat_c0_16_24
+
+    // 加载C[m][n+24:n+32]到mat_c0_24_32
+    add $32, mat_elem_idx       // 再偏移32字节
+    vmovups (MAT_C, mat_elem_idx), mat_c0_24_32
 
     // 装载矩阵C第二行的数据, 即C[m+1][n:n+32]
     mov temp_reg, mat_elem_idx
     add DIM_N, mat_elem_idx
     shl $2, mat_elem_idx        // 左移，相当于乘4
 
-    // TODO 练习3: 请添加加载C[m+1][n:n+32]-->mat_c1_0_8, mat_c1_8_16, mat_c1_16_24, mat_c1_24_32的逻辑
+    // 加载C[m+1][n:n+8]到mat_c1_0_8
+    vmovups (MAT_C, mat_elem_idx), mat_c1_0_8
 
+    // 加载C[m+1][n+8:n+16]到mat_c1_8_16
+    add $32, mat_elem_idx       // 偏移量为8个float，即32字节
+    vmovups (MAT_C, mat_elem_idx), mat_c1_8_16
+
+    // 加载C[m+1][n+16:n+24]到mat_c1_16_24
+    add $32, mat_elem_idx       // 再偏移32字节
+    vmovups (MAT_C, mat_elem_idx), mat_c1_16_24
+
+    // 加载C[m+1][n+24:n+32]到mat_c1_24_32
+    add $32, mat_elem_idx       // 再偏移32字节
+    vmovups (MAT_C, mat_elem_idx), mat_c1_24_32
 .endm
 
 .macro STORE_MAT_C
@@ -129,16 +181,55 @@
     mov temp_reg, mat_elem_idx
     shl $2, mat_elem_idx        // 左移，相当于乘4
 
-    // TODO 练习3: 请添加保存mat_c0_0_8, mat_c0_8_16, mat_c0_16_24, mat_c0_24_32 --> C[m][n:n+32]的逻辑
+    // 保存mat_c0_0_8到C[m][n:n+8]
+    vmovups mat_c0_0_8, (MAT_C, mat_elem_idx)
+
+    // 保存mat_c0_8_16到C[m][n+8:n+16]
+    add $32, mat_elem_idx       // 偏移量为8个float，即32字节
+    vmovups mat_c0_8_16, (MAT_C, mat_elem_idx)
+
+    // 保存mat_c0_16_24到C[m][n+16:n+24]
+    add $32, mat_elem_idx       // 再偏移32字节
+    vmovups mat_c0_16_24, (MAT_C, mat_elem_idx)
+
+    // 保存mat_c0_24_32到C[m][n+24:n+32]
+    add $32, mat_elem_idx       // 再偏移32字节
+    vmovups mat_c0_24_32, (MAT_C, mat_elem_idx)
 
     // 保存矩阵C第二行的数据, 即C[m+1][n:n+32]
-    // TODO 练习3: 请添加保存mat_c1_0_8, mat_c1_8_16, mat_c1_16_24, mat_c1_24_32 --> C[m+1][n:n+32]的逻辑
+    mov temp_reg, mat_elem_idx
+    add DIM_N, mat_elem_idx
+    shl $2, mat_elem_idx        // 左移，相当于乘4
 
+    // 保存mat_c1_0_8到C[m+1][n:n+8]
+    vmovups mat_c1_0_8, (MAT_C, mat_elem_idx)
+
+    // 保存mat_c1_8_16到C[m+1][n+8:n+16]
+    add $32, mat_elem_idx       // 偏移量为8个float，即32字节
+    vmovups mat_c1_8_16, (MAT_C, mat_elem_idx)
+
+    // 保存mat_c1_16_24到C[m+1][n+16:n+24]
+    add $32, mat_elem_idx       // 再偏移32字节
+    vmovups mat_c1_16_24, (MAT_C, mat_elem_idx)
+
+    // 保存mat_c1_24_32到C[m+1][n+24:n+32]
+    add $32, mat_elem_idx       // 再偏移32字节
+    vmovups mat_c1_24_32, (MAT_C, mat_elem_idx)
 .endm
 
 .macro DO_COMPUTE      // 计算 C[m:m+2][n:n+32] += A[m:m+2][k] * B[k:k+8][n:n+32]
 
-    // TODO 练习3: 请添加计算C[m:m+2][n:n+32] += A[m:m+2][k] * B[k:k+8][n:n+32]的逻辑
+    // 计算 C[m][n:n+32] += A[m][k] * B[k][n:n+32]
+    vfmadd231ps mat_a0_0_8, mat_b0_0_8, mat_c0_0_8
+    vfmadd231ps mat_a0_0_8, mat_b0_8_16, mat_c0_8_16
+    vfmadd231ps mat_a0_0_8, mat_b0_16_24, mat_c0_16_24
+    vfmadd231ps mat_a0_0_8, mat_b0_24_32, mat_c0_24_32
+
+    // 计算 C[m+1][n:n+32] += A[m+1][k] * B[k][n:n+32]
+    vfmadd231ps mat_a1_0_8, mat_b0_0_8, mat_c1_0_8
+    vfmadd231ps mat_a1_0_8, mat_b0_8_16, mat_c1_8_16
+    vfmadd231ps mat_a1_0_8, mat_b0_16_24, mat_c1_16_24
+    vfmadd231ps mat_a1_0_8, mat_b0_24_32, mat_c1_24_32
 
 .endm
 
