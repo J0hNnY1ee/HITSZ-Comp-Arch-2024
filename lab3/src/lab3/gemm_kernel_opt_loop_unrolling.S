@@ -1,7 +1,7 @@
 .text;
 .p2align 2;
-.global gemm_kernel_opt_prefetch;
-.type gemm_kernel_opt_prefetch, %function;
+.global gemm_kernel_opt_loop_unrolling;
+.type gemm_kernel_opt_loop_unrolling, %function;
 
 #define     MAT_C               %rdi
 #define     MAT_A               %rsi
@@ -13,7 +13,6 @@
 #define     loop_k              %r11
 #define     loop_n              %r12
 #define     mat_elem_idx        %r13
-#define     prefetch_elem_idx   %r15
 
 
 .macro PUSHD   // 保存原通用寄存器值
@@ -71,30 +70,42 @@ DO_LOOP_M:
     mul DIM_K
     mov %rax, mat_elem_idx
     add loop_k, mat_elem_idx                    // 计算 m*K+k
-    prefetch (MAT_A, mat_elem_idx, 4)
     flds (MAT_A, mat_elem_idx, 4)     // 加载 A[m][k]
-    
+
 DO_LOOP_N:
     mov DIM_N, %rax
     mul loop_k
     mov %rax, mat_elem_idx
-    add loop_n, mat_elem_idx     
-    prefetch (MAT_B, mat_elem_idx, 4)               // 计算 k*N+n
+    add loop_n, mat_elem_idx
     flds (MAT_B, mat_elem_idx, 4)     // 加载 B[k][n]
-    
-    fmul %st(1), %st(0)                 // 计算A[m][k] * B[k][n]
+    fmul %st(1), %st(0)                 // 计算A[m][k] * B[k][n]  --> st(0)
+
+    // 添加计算A[m][k] * B[k][n+1] --> st(0)的逻辑
+    add $1, mat_elem_idx                // 移动到B[k][n+1]的位置
+    flds (MAT_B, mat_elem_idx, 4)       // 加载 B[k][n+1]
+    fmul %st(2), %st(0)                 // 计算A[m][k] * B[k][n+1]  --> st(0)
 
     mov DIM_N, %rax
     mul loop_m
     mov %rax, mat_elem_idx
     add loop_n, mat_elem_idx                    // 计算 m*N+n
-    prefetch (MAT_C, mat_elem_idx, 4)
-    flds (MAT_C, mat_elem_idx, 4)     // 加载 C[m][n]
-    
-    faddp %st(1), %st(0)                 // 计算 C[m][n] + A[m][k] * B[k][n]
-    fstps (MAT_C, mat_elem_idx, 4)
 
-    add $1, loop_n
+    // 添加加载C[m][n] --> st(1) 和 C[m][n+1] --> st(0)的逻辑
+    flds (MAT_C, mat_elem_idx, 4)      // 加载 C[m][n] --> st(1)
+    add $1, mat_elem_idx                // 移动到C[m][n+1]的位置
+    flds (MAT_C, mat_elem_idx, 4)      // 加载 C[m][n+1] --> st(0)
+
+    // 添加部分和累加逻辑: C[m][n+1] + A[m][k] * B[k][n+1] 和 C[m][n] + A[m][k] * B[k][n]
+    faddp %st(2), %st(0)                // st(0) = C[m][n+1] + A[m][k] * B[k][n+1]
+    faddp %st(2), %st(0)                // st(0) = C[m][n] + A[m][k] * B[k][n]
+
+    // 保存C[m][n+1] 和 C[m][n]
+    fstps (MAT_C, mat_elem_idx, 4)      // 保存C[m][n+1]
+    sub $1, mat_elem_idx               // 移动到C[m][n]的位置
+    fstps (MAT_C, mat_elem_idx, 4)      // 保存C[m][n]
+
+    // 更新N维度的循环控制变量
+    add $2, loop_n                      // 每次迭代增加2，因为同时处理了两个元素
     cmp DIM_N, loop_n
     jl DO_LOOP_N
 
@@ -108,12 +119,9 @@ DO_LOOP_N:
     jl DO_LOOP_K
 .endm
 
-gemm_kernel_opt_prefetch:
+gemm_kernel_opt_loop_unrolling:
     PUSHD
     GEMM_INIT
     DO_GEMM
     POPD
     ret
-    
-
-
