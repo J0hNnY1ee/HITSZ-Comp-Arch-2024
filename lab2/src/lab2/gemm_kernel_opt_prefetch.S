@@ -71,7 +71,7 @@ DO_LOOP_M:
     mul DIM_K
     mov %rax, mat_elem_idx
     add loop_k, mat_elem_idx                    // 计算 m*K+k
-    prefetch (MAT_A, mat_elem_idx, 4)
+    prefetch (MAT_A, mat_elem_idx, 8)
     flds (MAT_A, mat_elem_idx, 4)     // 加载 A[m][k]
     
 DO_LOOP_N:
@@ -79,7 +79,7 @@ DO_LOOP_N:
     mul loop_k
     mov %rax, mat_elem_idx
     add loop_n, mat_elem_idx     
-    prefetch (MAT_B, mat_elem_idx, 4)               // 计算 k*N+n
+    prefetch (MAT_B, mat_elem_idx, 8)               // 计算 k*N+n
     flds (MAT_B, mat_elem_idx, 4)     // 加载 B[k][n]
     
     fmul %st(1), %st(0)                 // 计算A[m][k] * B[k][n]
@@ -88,7 +88,7 @@ DO_LOOP_N:
     mul loop_m
     mov %rax, mat_elem_idx
     add loop_n, mat_elem_idx                    // 计算 m*N+n
-    prefetch (MAT_C, mat_elem_idx, 4)
+    prefetch (MAT_C, mat_elem_idx, 8)
     flds (MAT_C, mat_elem_idx, 4)     // 加载 C[m][n]
     
     faddp %st(1), %st(0)                 // 计算 C[m][n] + A[m][k] * B[k][n]
