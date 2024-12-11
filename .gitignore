@@ -2,3 +2,4 @@
 */tools
 lab2/tools/lmbench
 *.tar.gz
+*.bin
