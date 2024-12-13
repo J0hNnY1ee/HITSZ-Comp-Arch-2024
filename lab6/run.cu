@@ -14,10 +14,9 @@
     #include <sys/mman.h>
 #endif
 
-
-//import cuda relevant head files 
 #include <cuda_runtime.h>
-using namespace std;
+#include <cublas_v2.h>
+#include <device_launch_parameters.h>
 // ----------------------------------------------------------------------------
 // Transformer model
 
@@ -83,15 +82,15 @@ void malloc_run_state(RunState* s, Config* p) {
     // we calloc instead of malloc to keep valgrind happy
     int kv_dim = (p->dim * p->n_kv_heads) / p->n_heads;
     s->x = (float *)calloc(p->dim, sizeof(float));
-    s->xb = (float *)calloc(p->dim, sizeof(float));
-    s->xb2 = (float *)calloc(p->dim, sizeof(float));
+    s->xb =(float *) calloc(p->dim, sizeof(float));
+    s->xb2 =(float *) calloc(p->dim, sizeof(float));
     s->hb = (float *)calloc(p->hidden_dim, sizeof(float));
     s->hb2 =(float *) calloc(p->hidden_dim, sizeof(float));
     s->q = (float *)calloc(p->dim, sizeof(float));
     s->key_cache =(float *) calloc(p->n_layers * p->seq_len * kv_dim, sizeof(float));
-    s->value_cache = (float *)calloc(p->n_layers * p->seq_len * kv_dim, sizeof(float));
-    s->att = (float *)calloc(p->n_heads * p->seq_len, sizeof(float));
-    s->logits = (float *)calloc(p->vocab_size, sizeof(float));
+    s->value_cache =(float *) calloc(p->n_layers * p->seq_len * kv_dim, sizeof(float));
+    s->att =(float *) calloc(p->n_heads * p->seq_len, sizeof(float));
+    s->logits =(float *) calloc(p->vocab_size, sizeof(float));
     // ensure all mallocs went fine
     if (!s->x || !s->xb || !s->xb2 || !s->hb || !s->hb2 || !s->q
      || !s->key_cache || !s->value_cache || !s->att || !s->logits) {
@@ -160,7 +159,7 @@ void read_checkpoint(char* checkpoint, Config* config, TransformerWeights* weigh
     // memory map the Transformer weights into the data pointer
     *fd = open(checkpoint, O_RDONLY); // open in read only mode
     if (*fd == -1) { fprintf(stderr, "open failed!\n"); exit(EXIT_FAILURE); }
-    *data =(float *) mmap(NULL, *file_size, PROT_READ, MAP_PRIVATE, *fd, 0);
+    *data = (float *)mmap(NULL, *file_size, PROT_READ, MAP_PRIVATE, *fd, 0);
     if (*data == MAP_FAILED) { fprintf(stderr, "mmap failed!\n"); exit(EXIT_FAILURE); }
     float* weights_ptr = *data + sizeof(Config)/sizeof(float);
     memory_map_weights(weights, config, weights_ptr, shared_weights);
@@ -219,56 +218,22 @@ void softmax(float* x, int size) {
     }
 }
 
-// void matmul(float* xout, float* x, float* w, int n, int d) {
-//     // W (d,n) @ x (n,) -> xout (d,)
-//     // by far the most amount of time is spent inside this little function
-//     int i;
-//     #pragma omp parallel for private(i)
-//     for (i = 0; i < d; i++) {
-//         float val = 0.0f;
-//         for (int j = 0; j < n; j++) {
-//             val += w[i * n + j] * x[j];
-//         }
-//         xout[i] = val;
-//     }
-// }
-#include <cuda_runtime.h>
-
-// CUDA kernel for matrix-vector multiplication
-__global__ void matmul_kernel(float* xout, const float* x, const float* w, int n, int d) {
-    // Calculate the row index of the w and xout matrix
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-
-    // Ensure we do not go out of bounds
-    if (i < d) {
+void matmul(float* xout, float* x, float* w, int n, int d) {
+    // W (d,n) @ x (n,) -> xout (d,)
+    // by far the most amount of time is spent inside this little function
+    int i;
+    #pragma omp parallel for private(i)
+    for (i = 0; i < d; i++) {
         float val = 0.0f;
-        for (int j = 0; j < n; ++j) {
+        for (int j = 0; j < n; j++) {
             val += w[i * n + j] * x[j];
         }
         xout[i] = val;
     }
 }
 
-void matmul(float* xout, const float* x, const float* w, int n, int d) {
-    // Define the size of a block and grid
-    int threadsPerBlock = 256;
-    int blocksPerGrid = (d + threadsPerBlock - 1) / threadsPerBlock;
 
-    // Launch the CUDA kernel
-    matmul_kernel<<<blocksPerGrid, threadsPerBlock>>>(xout, x, w, n, d);
 
-    // It's good practice to check for errors in kernel launches
-    cudaError_t err = cudaGetLastError();
-    if (err != cudaSuccess) {
-        // Handle error
-        printf("CUDA kernel launch failed: %s\n", cudaGetErrorString(err));
-    }
-
-    // Optionally, synchronize device if you want to ensure completion
-    // before proceeding. This is often not necessary if the next operation
-    // that depends on this result is also on the GPU.
-    // cudaDeviceSynchronize();
-}
 
 float* forward(Transformer* transformer, int token, int pos) {
 
@@ -402,7 +367,6 @@ float* forward(Transformer* transformer, int token, int pos) {
     matmul(s->logits, x, w->wcls, p->dim, p->vocab_size);
     return s->logits;
 }
-
 // ----------------------------------------------------------------------------
 // The Byte Pair Encoding (BPE) Tokenizer that translates strings <-> tokens
 
@@ -484,15 +448,10 @@ void safe_printf(char *piece) {
     printf("%s", piece);
 }
 
-int str_lookup(const char *str, TokenIndex *sorted_vocab, int vocab_size) {
-    char temp_str[BUFSIZ]; // 定义足够大的缓冲区
-    snprintf(temp_str, sizeof(temp_str), "%s", str); // 复制字符串到缓冲区
-
-    // 创建临时 TokenIndex 用于搜索
-    TokenIndex tok = { .str = temp_str };
-
-    // 执行二分查找
-    TokenIndex *res = (TokenIndex *)bsearch(&tok, sorted_vocab, vocab_size, sizeof(TokenIndex), compare_tokens);
+int str_lookup(char *str, TokenIndex *sorted_vocab, int vocab_size) {
+    // efficiently find the perfect match for str in vocab, return its index or -1 if not found
+    TokenIndex tok = { .str = str }; // acts as the key to search for
+    TokenIndex *res =(TokenIndex *) bsearch(&tok, sorted_vocab, vocab_size, sizeof(TokenIndex), compare_tokens);
     return res != NULL ? res->id : -1;
 }
 
@@ -513,7 +472,7 @@ void encode(Tokenizer* t, char *text, int8_t bos, int8_t eos, int *tokens, int *
 
     // create a temporary buffer that will store merge candidates of always two consecutive tokens
     // *2 for concat, +1 for null terminator +2 for UTF8 (in case max_token_length is 1)
-    char* str_buffer =(char *) malloc((t->max_token_length*2 +1 +2) * sizeof(char));
+    char* str_buffer = (char *)malloc((t->max_token_length*2 +1 +2) * sizeof(char));
     size_t str_len = 0;
 
     // start at 0 tokens
@@ -527,7 +486,7 @@ void encode(Tokenizer* t, char *text, int8_t bos, int8_t eos, int *tokens, int *
     // TODO: pretty sure this isn't correct in the general case but I don't have the
     // energy to read more of the sentencepiece code to figure out what it's doing
     if (text[0] != '\0') {
-        int dummy_prefix = str_lookup(" ", t->sorted_vocab, t->vocab_size);
+        int dummy_prefix = str_lookup((char *)" ", t->sorted_vocab, t->vocab_size);
         tokens[(*n_tokens)++] = dummy_prefix;
     }
 
@@ -717,7 +676,7 @@ void build_sampler(Sampler* sampler, int vocab_size, float temperature, float to
     sampler->topp = topp;
     sampler->rng_state = rng_seed;
     // buffer only used with nucleus sampling; may not need but it's ~small
-    sampler->probindex =(ProbIndex *) malloc(sampler->vocab_size * sizeof(ProbIndex));
+    sampler->probindex = (ProbIndex *)malloc(sampler->vocab_size * sizeof(ProbIndex));
 }
 
 void free_sampler(Sampler* sampler) {
@@ -774,7 +733,7 @@ long time_in_ms() {
 // generation loop
 
 void generate(Transformer *transformer, Tokenizer *tokenizer, Sampler *sampler, char *prompt, int steps) {
-    char *empty_prompt = (char *)"";
+    char *empty_prompt =(char *) "";
     if (prompt == NULL) { prompt = empty_prompt; }
 
     // encode the (string) prompt into tokens sequence
@@ -960,7 +919,7 @@ int main(int argc, char *argv[]) {
     int steps = 256;            // number of steps to run for
     char *prompt = NULL;        // prompt string
     unsigned long long rng_seed = 0; // seed rng with time by default
-    char *mode =(char *) "generate";    // generate|chat
+    char *mode = (char *)"generate";    // generate|chat
     char *system_prompt = NULL; // the (optional) system prompt to use in chat mode
 
     // poor man's C argparse so we can override the defaults above from the command line
