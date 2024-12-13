@@ -218,12 +218,10 @@ void softmax(float* x, int size) {
     }
 }
 
-void matmul(float* xout, float* x, float* w, int n, int d) {
-    // W (d,n) @ x (n,) -> xout (d,)
-    // by far the most amount of time is spent inside this little function
-    int i;
-    #pragma omp parallel for private(i)
-    for (i = 0; i < d; i++) {
+__global__ void matmulKernel(float* xout, const float* x, const float* w, int n, int d) {
+    // 每个线程负责计算 xout 的一个元素
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < d) {
         float val = 0.0f;
         for (int j = 0; j < n; j++) {
             val += w[i * n + j] * x[j];
@@ -231,6 +229,30 @@ void matmul(float* xout, float* x, float* w, int n, int d) {
         xout[i] = val;
     }
 }
+
+
+
+float *d_x, *d_w, *d_xout;
+
+
+
+void matmul(float* xout, const float* x, const float* w, int n, int d) {
+
+    // 将数据从主机复制到设备
+    cudaMemcpy(d_x, x, n * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_w, w, d * n * sizeof(float), cudaMemcpyHostToDevice);
+
+    // 配置线程块和线程网格
+    int threadsPerBlock = 16;
+    int blocksPerGrid = (d + threadsPerBlock - 1) / threadsPerBlock;
+
+    // 启动 CUDA 内核
+    matmulKernel<<<blocksPerGrid, threadsPerBlock>>>(d_xout, d_x, d_w, n, d);
+
+    // 将结果从设备复制回主机
+    cudaMemcpy(xout, d_xout, d * sizeof(float), cudaMemcpyDeviceToHost);
+}
+
 
 
 
@@ -910,6 +932,11 @@ void error_usage() {
 }
 
 int main(int argc, char *argv[]) {
+    cudaMalloc((void**)&d_x, 2048 *sizeof(float));
+    cudaMalloc((void**)&d_w, 2048*32000 * sizeof(float));
+    cudaMalloc((void**)&d_xout, 32000 * sizeof(float));
+        // 释放 GPU 内存
+
 
     // default parameters
     char *checkpoint_path = NULL;  // e.g. out/model.bin
@@ -974,6 +1001,9 @@ int main(int argc, char *argv[]) {
     free_sampler(&sampler);
     free_tokenizer(&tokenizer);
     free_transformer(&transformer);
+    cudaFree(d_x);
+    cudaFree(d_w);
+    cudaFree(d_xout);
     return 0;
 }
 #endif
